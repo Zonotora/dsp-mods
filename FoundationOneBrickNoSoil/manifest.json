@@ -1,0 +1,9 @@
+{
+  "name": "FoundationOneBrickNoSoil",
+  "version_number": "1.0.3",
+  "website_url": "https://github.com/aekoch/DSP-Mods/tree/main/UnlimitedFoundations",
+  "description": "1 Stone Brick makes 1 Foundation; manual and blueprint placement use zero Soil.",
+  "dependencies": [
+    "xiaoye97-BepInEx-5.4.17"
+  ]
+}

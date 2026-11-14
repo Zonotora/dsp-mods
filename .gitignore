@@ -1,0 +1,58 @@
+
+# .NET build outputs
+bin/
+obj/
+Debug/
+Release/
+artifacts/
+TestResults/
+
+# Compiled binaries
+*.dll
+*.exe
+*.pdb
+*.mdb
+
+# NuGet
+packages/
+*.nupkg
+*.snupkg
+
+# IDE settings
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# JetBrains Rider
+*.DotSettings.user
+
+# OS files
+.DS_Store
+Thumbs.db
+*~
+*.swp
+*.swo
+
+# Logs and temporary files
+*.log
+*.tmp
+*.cache
+
+# Generated r2modman packages
+Local-FoundationOneBrickNoSoil-*.zip
+
+# Local dependencies and game files
+BepInEx/
+DSPGAME_Data/
+GameData/
+libs/
+references/
+
+# Local environment configuration
+.env
+.env.local
+
