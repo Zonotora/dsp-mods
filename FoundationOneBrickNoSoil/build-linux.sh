@@ -32,6 +32,7 @@ fi
 for file in \
   "$GAME_DIR/DSPGAME_Data/Managed/Assembly-CSharp.dll" \
   "$GAME_DIR/DSPGAME_Data/Managed/UnityEngine.CoreModule.dll" \
+  "$GAME_DIR/DSPGAME_Data/Managed/UnityEngine.IMGUIModule.dll" \
   "$CORE_DIR/BepInEx.dll" \
   "$CORE_DIR/0Harmony.dll"; do
   if [[ ! -f "$file" ]]; then
@@ -52,7 +53,7 @@ python3 - "$HERE" "$DLL" <<'PY'
 import pathlib, sys, zipfile
 here = pathlib.Path(sys.argv[1])
 dll = pathlib.Path(sys.argv[2])
-package = here / 'Local-FoundationOneBrickNoSoil-1.0.3.zip'
+package = here / 'Local-FoundationOneBrickNoSoil-1.1.0.zip'
 with zipfile.ZipFile(package, 'w', zipfile.ZIP_DEFLATED) as z:
     for name in ('manifest.json', 'icon.png', 'README.md'):
         z.write(here / name, name)

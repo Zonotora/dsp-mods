@@ -23,6 +23,10 @@
       <HintPath>$(DSPGameDir)/DSPGAME_Data/Managed/UnityEngine.CoreModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="UnityEngine.IMGUIModule">
+      <HintPath>$(DSPGameDir)/DSPGAME_Data/Managed/UnityEngine.IMGUIModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
     <Reference Include="UnityEngine" Condition="Exists('$(DSPGameDir)/DSPGAME_Data/Managed/UnityEngine.dll')">
       <HintPath>$(DSPGameDir)/DSPGAME_Data/Managed/UnityEngine.dll</HintPath>
       <Private>false</Private>

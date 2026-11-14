@@ -17,12 +17,13 @@ namespace FoundationOneBrickNoSoil
     {
         public const string PluginGuid = "com.community.dsp.FoundationOneBrickNoSoil";
         public const string PluginName = "FoundationOneBrickNoSoil";
-        public const string PluginVersion = "1.0.3";
+        public const string PluginVersion = "1.1.0";
 
         private const int FoundationItemId = 1131;
         private const int StoneBrickItemId = 1108;
 
         private Harmony harmony;
+        private EquatorPainter equatorPainter;
         private static ManualLogSource log;
         // Last-known local player Soil balance, used only as a fallback if a new
         // game version bypasses Player.SetSandCount for blueprint placement.
@@ -37,6 +38,7 @@ namespace FoundationOneBrickNoSoil
         private void Awake()
         {
             log = Logger;
+            equatorPainter = new EquatorPainter(Config, Logger);
             harmony = new Harmony(PluginGuid);
 
             // Modify recipe prototypes BEFORE the game derives its crafting data.
@@ -90,6 +92,8 @@ namespace FoundationOneBrickNoSoil
             {
                 Logger.LogError("Could not patch modern Soil cost calculation: " + ex);
             }
+
+            InstallUnlimitedFoundationPatches();
 
             // Blueprint terrain work is not performed by BuildTool_Reform.
             // Earlier versions tried to match one specific IL branch in
@@ -209,9 +213,12 @@ namespace FoundationOneBrickNoSoil
         private void InstallBlueprintGetterPatches()
         {
             var getter = AccessTools.PropertyGetter(typeof(Player), "sandCount");
-            if (getter == null || getter.ReturnType != typeof(long))
+            var field = AccessTools.Field(typeof(Player), "sandCount");
+            bool hasGetter = getter != null && getter.ReturnType == typeof(long);
+            bool hasField = field != null && field.FieldType == typeof(long);
+            if (!hasGetter && !hasField)
             {
-                log.LogError("Blueprint patch: Player.get_sandCount() returning long not found.");
+                log.LogError("Blueprint patch: Player.sandCount getter/field returning long not found.");
                 return;
             }
 
@@ -229,8 +236,9 @@ namespace FoundationOneBrickNoSoil
                     // touch methods which actually read the Soil balance.
                     foreach (var instr in PatchProcessor.GetOriginalInstructions(method))
                     {
-                        if ((instr.opcode == OpCodes.Call || instr.opcode == OpCodes.Callvirt) &&
-                            Equals(instr.operand, getter))
+                        if ((hasGetter && (instr.opcode == OpCodes.Call || instr.opcode == OpCodes.Callvirt) &&
+                            Equals(instr.operand, getter)) ||
+                            (hasField && instr.opcode == OpCodes.Ldfld && Equals(instr.operand, field)))
                             sites++;
                     }
                     if (sites == 0)
@@ -256,11 +264,13 @@ namespace FoundationOneBrickNoSoil
             IEnumerable<CodeInstruction> instructions, MethodBase __originalMethod)
         {
             var getter = AccessTools.PropertyGetter(typeof(Player), "sandCount");
+            var field = AccessTools.Field(typeof(Player), "sandCount");
             int count = 0;
             foreach (var instr in instructions)
             {
-                if ((instr.opcode == OpCodes.Call || instr.opcode == OpCodes.Callvirt) &&
-                    Equals(instr.operand, getter))
+                if (((instr.opcode == OpCodes.Call || instr.opcode == OpCodes.Callvirt) &&
+                    getter != null && Equals(instr.operand, getter)) ||
+                    (instr.opcode == OpCodes.Ldfld && field != null && Equals(instr.operand, field)))
                 {
                     // Same stack effect: a Player reference -> a long.
                     instr.opcode = OpCodes.Call;
@@ -279,6 +289,7 @@ namespace FoundationOneBrickNoSoil
         // showing whether the SetSandCount hook was bypassed.
         private void Update()
         {
+            equatorPainter.Update();
             // Do not capture or restore Soil during a save loading/unloading.
             if (!GameMain.isRunning)
             {
@@ -366,6 +377,93 @@ namespace FoundationOneBrickNoSoil
         private static void AfterComputeFlattenTerrainReform(ref int __result)
         {
             __result = 0;
+        }
+
+
+        // The player can build with Foundations even at zero inventory.
+        // Actual removal is suppressed, including when blueprints call the
+        // same storage methods. This does not add items to the saved inventory.
+        private void InstallUnlimitedFoundationPatches()
+        {
+            int countReads = 0;
+            int countTakes = 0;
+            foreach (var m in AccessTools.GetDeclaredMethods(typeof(StorageComponent)))
+            {
+                var args = m.GetParameters();
+                try
+                {
+                    if (m.Name == "GetItemCount" && m.ReturnType == typeof(int) &&
+                        args.Length > 0 && args[0].ParameterType == typeof(int))
+                    {
+                        harmony.Patch(m, postfix: new HarmonyMethod(typeof(Plugin),
+                            nameof(AfterFoundationItemCount)));
+                        countReads++;
+                    }
+                    else if (m.Name == "TakeTailItems" && args.Length >= 2 &&
+                        args[0].ParameterType == typeof(int).MakeByRefType() &&
+                        args[1].ParameterType == typeof(int).MakeByRefType())
+                    {
+                        harmony.Patch(m, prefix: new HarmonyMethod(typeof(Plugin),
+                            nameof(BeforeTakeFoundationItems)));
+                        countTakes++;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    log.LogWarning("Could not patch StorageComponent." + m.Name + ": " + ex);
+                }
+            }
+            log.LogInfo("Unlimited Foundations: patched " + countReads +
+                " GetItemCount and " + countTakes + " TakeTailItems method(s).");
+            if (countReads == 0 || countTakes == 0)
+                log.LogWarning("Foundation storage APIs changed; unlimited placement may not work.");
+
+            // Manual placement also uses items held by the cursor, if present.
+            foreach (var m in AccessTools.GetDeclaredMethods(typeof(Player)))
+            {
+                var args = m.GetParameters();
+                if (m.Name != "UseHandItems" || args.Length < 1 ||
+                    args[0].ParameterType != typeof(int)) continue;
+                try
+                {
+                    harmony.Patch(m, prefix: new HarmonyMethod(typeof(Plugin),
+                        nameof(BeforeUseFoundationHandItems)));
+                    log.LogInfo("Unlimited Foundations: patched Player.UseHandItems.");
+                }
+                catch (Exception ex)
+                {
+                    log.LogWarning("Could not patch Player.UseHandItems: " + ex);
+                }
+            }
+        }
+
+        private static void AfterFoundationItemCount(StorageComponent __instance, int __0, ref int __result)
+        {
+            if (GameMain.isRunning && __0 == FoundationItemId &&
+                GameMain.mainPlayer != null &&
+                ReferenceEquals(__instance, GameMain.mainPlayer.package))
+                __result = Math.Max(__result, 1000000);
+        }
+
+        private static void BeforeTakeFoundationItems(StorageComponent __instance, ref int __0, ref int __1)
+        {
+            if (GameMain.isRunning && __0 == FoundationItemId &&
+                GameMain.mainPlayer != null &&
+                ReferenceEquals(__instance, GameMain.mainPlayer.package))
+                __1 = 0; // no items are actually removed
+        }
+
+        private static void BeforeUseFoundationHandItems(Player __instance, ref int __0)
+        {
+            if (GameMain.isRunning && __instance != null &&
+                __instance.inhandItemId == FoundationItemId)
+                __0 = 0;
+        }
+
+        private void OnGUI()
+        {
+            if (equatorPainter != null)
+                equatorPainter.DrawGui();
         }
 
         private void OnDestroy()

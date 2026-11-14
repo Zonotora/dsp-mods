@@ -1,0 +1,24 @@
+# .NET and IDE outputs
+bin/
+obj/
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.pdb
+
+# Generated r2modman packages
+Local-FoundationOneBrickNoSoil-*.zip
+
+# Local game dependencies (never commit game DLLs)
+DSPGAME_Data/
+BepInEx/
+libs/
+references/
+
+# OS and temporary files
+.DS_Store
+*.log
+*.tmp
+*~
